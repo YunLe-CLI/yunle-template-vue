@@ -1,5 +1,36 @@
 var path = require('path')
 var webpack = require('webpack')
+var Mock = require('mockjs');
+
+const serverConfig = require('./config/server.config');
+const webpackConfig = require('./config/_config');
+const PATHS = webpackConfig.PATHS;
+const proxys = {};
+
+serverConfig.proxys.dev.map(function (item) {
+  proxys[item.path] = {
+    target: item.host,
+    pathRewrite: item.pathRewrite,
+    changeOrigin: true
+  };
+});
+serverConfig.router.dev.map(function (item) {
+  proxys[item.route] = {
+    secure: false,
+    bypass: function(req, res, opt){
+      if(req.path.indexOf(item.route) !== -1){
+        if (item.mockData) {
+          const data = Mock.mock(item.mockData);
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify(data));
+          return;
+        }
+        item.handle ? item.handle(req, res) : null;
+      }
+      return req.path;
+    }
+  };
+});
 
 module.exports = {
   entry: './src/main.js',
@@ -45,7 +76,9 @@ module.exports = {
   },
   devServer: {
     historyApiFallback: true,
-    noInfo: true
+    noInfo: true,
+    port: webpackConfig.port,
+    proxy: proxys,
   },
   performance: {
     hints: false
